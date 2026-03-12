@@ -24,11 +24,16 @@ export const sendOTPService = async (phoneNumber) => {
     // Use static OTP in development, random in production
     const otp = process.env.NODE_ENV === 'development' ? DEV_OTP : generateOTP()
 
+    console.log(`[SendOTP] NODE_ENV: ${process.env.NODE_ENV}, Using OTP: ${otp}`)
+
     // Delete previous OTPs and save new one in parallel
-    await Promise.all([
+    const [deleteResult, createResult] = await Promise.all([
       OTP.deleteMany({ phoneNumber }),
       OTP.create({ phoneNumber, otp }),
     ])
+
+    console.log(`[OTP Created] Phone: ${phoneNumber}, OTP: ${otp}, Doc ID: ${createResult._id}`)
+    console.log(`[OTP Deleted] Previous records: ${deleteResult.deletedCount}`)
 
     // TODO: Implement actual SMS service (Twilio, AWS SNS, etc.)
     // For now, log it for development
@@ -80,14 +85,13 @@ export const verifyOTPService = async (phoneNumber, otp) => {
       .lean() // READ OPERATION: lean() is safe for verification queries
 
     if (!otpRecord) {
-      if (process.env.NODE_ENV === 'development') {
-        // Log for debugging in development only (select minimal fields)
-        const allRecords = await OTP.find({ phoneNumber })
-          .select('otp isUsed')
-          .lean() // READ OPERATION: lean() is safe for debug logging
-        console.log(`[OTP NOT FOUND] Phone: ${phoneNumber}, Attempt OTP: ${otp}`)
-        console.log(`[Existing OTPs for phone]:`, allRecords.map(r => ({ otp: r.otp, isUsed: r.isUsed })))
-      }
+      // Log for debugging in all environments (select minimal fields)
+      const allRecords = await OTP.find({ phoneNumber })
+        .select('otp isUsed createdAt')
+        .lean() // READ OPERATION: lean() is safe for debug logging
+      console.log(`[OTP NOT FOUND] Phone: ${phoneNumber}, Attempt OTP: ${otp}`)
+      console.log(`[Existing OTPs for phone]:`, allRecords.map(r => ({ otp: r.otp, isUsed: r.isUsed, createdAt: r.createdAt })))
+      console.log(`[Environment] NODE_ENV: ${process.env.NODE_ENV}`)
       
       return {
         success: false,
