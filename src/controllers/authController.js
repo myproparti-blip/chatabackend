@@ -39,6 +39,9 @@ export const verifyOTP = async (req, res) => {
   try {
     const { phoneNumber, otp } = req.body
 
+    console.log(`[Verify OTP Controller] Received body:`, req.body)
+    console.log(`[Verify OTP Controller] phoneNumber: "${phoneNumber}" (${typeof phoneNumber}), otp: "${otp}" (${typeof otp})`)
+
     if (!phoneNumber || !otp) {
       return res.status(400).json({
         success: false,
@@ -55,7 +58,7 @@ export const verifyOTP = async (req, res) => {
     // Set cookie with token (optional)
     res.cookie('authToken', result.token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: false, // Set to true in production with HTTPS
       sameSite: 'strict',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     })

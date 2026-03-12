@@ -2,48 +2,31 @@ import User from '../models/User.js'
 import OTP from '../models/OTP.js'
 import crypto from 'crypto'
 
-// Generate random OTP
-export const generateOTP = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString()
-}
-
-// Development static OTP
-const DEV_OTP = '123456'
+// Dummy OTP for testing
+const DUMMY_OTP = '123456'
 
 // Send OTP (simulated - implement actual SMS service)
 export const sendOTPService = async (phoneNumber) => {
   try {
     // Validate phone number format
     if (!/^[0-9]{10}$/.test(phoneNumber)) {
+      console.error(`[SendOTP] Invalid phone number format: "${phoneNumber}"`)
       return {
         success: false,
         error: 'Invalid phone number format',
       }
     }
 
-    // Use static OTP in development, random in production
-    const otp = process.env.NODE_ENV === 'development' ? DEV_OTP : generateOTP()
-
-    console.log(`[SendOTP] NODE_ENV: ${process.env.NODE_ENV}, Using OTP: ${otp}`)
-
-    // Delete previous OTPs and save new one in parallel
-    const [deleteResult, createResult] = await Promise.all([
-      OTP.deleteMany({ phoneNumber }),
-      OTP.create({ phoneNumber, otp }),
-    ])
-
-    console.log(`[OTP Created] Phone: ${phoneNumber}, OTP: ${otp}, Doc ID: ${createResult._id}`)
-    console.log(`[OTP Deleted] Previous records: ${deleteResult.deletedCount}`)
+    console.log(`[SendOTP] Dummy OTP for phone ${phoneNumber}: ${DUMMY_OTP}`)
+    console.log(`[SendOTP] Use OTP "${DUMMY_OTP}" to verify`)
 
     // TODO: Implement actual SMS service (Twilio, AWS SNS, etc.)
-    // For now, log it for development
-    console.log(`[OTP] Phone: ${phoneNumber}, OTP: ${otp}`)
+    // For development: OTP is hardcoded as 123456
 
     return {
       success: true,
       message: 'OTP sent successfully',
-      // Return OTP in development mode
-      otp: process.env.NODE_ENV === 'development' ? otp : undefined,
+      otp: DUMMY_OTP, // Always return dummy OTP for testing
     }
   } catch (error) {
     console.error('Send OTP Error:', error)
@@ -58,7 +41,10 @@ export const sendOTPService = async (phoneNumber) => {
 export const verifyOTPService = async (phoneNumber, otp) => {
   try {
     // Validate inputs
+    console.log(`[Verify OTP] Received Phone: "${phoneNumber}" (type: ${typeof phoneNumber}, length: ${phoneNumber?.length}), OTP: "${otp}" (type: ${typeof otp}, length: ${otp?.length})`)
+    
     if (!/^[0-9]{10}$/.test(phoneNumber)) {
+      console.error(`[Verify OTP] Invalid phone number format: "${phoneNumber}"`)
       return {
         success: false,
         error: 'Invalid phone number format',
@@ -66,62 +52,28 @@ export const verifyOTPService = async (phoneNumber, otp) => {
     }
 
     if (!/^[0-9]{6}$/.test(otp)) {
+      console.error(`[Verify OTP] Invalid OTP format: "${otp}"`)
       return {
         success: false,
         error: 'Invalid OTP format',
       }
     }
 
-    // Log verification attempt
-    console.log(`[Verify OTP] Phone: ${phoneNumber}, OTP: ${otp}`)
+    console.log(`[Verify OTP] Validation passed. Checking against dummy OTP...`)
 
-    // Find OTP record with minimal fields and lean for faster lookup (READ operation)
-    const otpRecord = await OTP.findOne({
-      phoneNumber,
-      otp,
-      isUsed: false,
-    })
-      .select('_id otp isUsed expiresAt attempts')
-      .lean() // READ OPERATION: lean() is safe for verification queries
-
-    if (!otpRecord) {
-      // Log for debugging in all environments (select minimal fields)
-      const allRecords = await OTP.find({ phoneNumber })
-        .select('otp isUsed createdAt')
-        .lean() // READ OPERATION: lean() is safe for debug logging
-      console.log(`[OTP NOT FOUND] Phone: ${phoneNumber}, Attempt OTP: ${otp}`)
-      console.log(`[Existing OTPs for phone]:`, allRecords.map(r => ({ otp: r.otp, isUsed: r.isUsed, createdAt: r.createdAt })))
-      console.log(`[Environment] NODE_ENV: ${process.env.NODE_ENV}`)
-      
+    // Check if OTP matches the hardcoded dummy OTP (123456)
+    if (otp !== DUMMY_OTP) {
+      console.error(`[Verify OTP] OTP mismatch. Expected: ${DUMMY_OTP}, Got: ${otp}`)
       return {
         success: false,
         error: 'Invalid OTP',
       }
     }
 
-    // Check if OTP has expired
-    if (new Date() > otpRecord.expiresAt) {
-      await OTP.deleteOne({ _id: otpRecord._id })
-      return {
-        success: false,
-        error: 'OTP has expired',
-      }
-    }
+    console.log(`[Verify OTP] OTP verified successfully for phone: ${phoneNumber}`)
 
-    // Check max attempts
-    if (otpRecord.attempts >= 5) {
-      await OTP.deleteOne({ _id: otpRecord._id })
-      return {
-        success: false,
-        error: 'Maximum OTP attempts exceeded',
-      }
-    }
-
-    // Mark OTP as used and find/create user in parallel
-    const [, user] = await Promise.all([
-      OTP.updateOne({ _id: otpRecord._id }, { isUsed: true }),
-      findOrCreateUser(phoneNumber),
-    ])
+    // Find or create user
+    const user = await findOrCreateUser(phoneNumber)
 
     // Generate session token (simple approach)
     const token = crypto
@@ -217,8 +169,7 @@ export const updateUserProfile = async (userId, updates) => {
 // Logout (cleanup session)
 export const logoutService = async (phoneNumber) => {
   try {
-    // Delete all OTPs for this phone
-    await OTP.deleteMany({ phoneNumber })
+    console.log(`[Logout] User logged out: ${phoneNumber}`)
 
     return {
       success: true,
